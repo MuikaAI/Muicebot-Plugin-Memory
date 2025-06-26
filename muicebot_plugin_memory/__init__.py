@@ -2,6 +2,7 @@ from time import perf_counter
 
 from muicebot.llm import ModelRequest
 from muicebot.models import Message
+from muicebot.plugin import PluginMetadata
 from muicebot.plugin.func_call import on_function_call
 from muicebot.plugin.func_call.parameter import Integer, String
 from muicebot.plugin.hook import on_before_completion, on_finish_chat
@@ -9,9 +10,16 @@ from nonebot import get_driver, logger
 from nonebot.adapters import Event
 from nonebot_plugin_orm import get_session
 
-from .config import config
+from .config import Config, config
 from .rag import RAGSystem
 from .scheduler import Scheduler
+
+__plugin_meta__ = PluginMetadata(
+    name="Muicebot 记忆插件",
+    description="基于 LUFY 的 Muicebot RAG 记忆插件",
+    usage="直接使用",
+    config=Config,
+)
 
 driver = get_driver()
 
