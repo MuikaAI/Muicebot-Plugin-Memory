@@ -12,6 +12,8 @@ class Config(BaseModel):
 
     memory_session_expire_time: int = 60
     """会话过期时间（分钟）"""
+    memory_session_min_epoch: int = 5
+    """会话中的最小对话轮数"""
 
     memory_cosine_similarity: float = 0.8
     """余弦相似度阈值，低于此值的将不被回忆"""

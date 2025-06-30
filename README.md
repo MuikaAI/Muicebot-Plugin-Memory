@@ -117,6 +117,14 @@ git clone https://huggingface.co/FacebookAI/roberta-large --depth 1
 
 - 默认值: 60
 
+### memory_session_min_epoch
+
+- 说明: 最小会话轮数，会话轮数只有大于或等于时才会触发记忆保存机制
+
+- 类型: int
+
+- 默认值: 5
+
 ### memory_cosine_similarity
 
 - 说明: 余弦相似度阈值，低于此值的将不被回忆（除非进行大量实验，否则不要轻易更改此项）

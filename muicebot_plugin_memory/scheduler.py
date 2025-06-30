@@ -45,6 +45,11 @@ class Scheduler:
         self._user_message_pool.setdefault(userid, []).append(message)
 
         async def run_summary():
+            if len(self._user_message_pool[userid]) < config.memory_session_min_epoch:
+                logger.debug("会话总长度小于阈值，已跳过总结")
+                del self._user_message_pool[userid]
+                return
+
             logger.info(f"开始总结用户{userid}的记忆...")
             start_time = perf_counter()
             session = get_session()
