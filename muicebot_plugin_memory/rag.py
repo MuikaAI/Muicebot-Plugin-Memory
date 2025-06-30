@@ -244,26 +244,20 @@ class RAGSystem:
         return math.pow(math.e, -(session_interval / score))
 
     async def retrieval_memory(
-        self, session: AsyncSession, user_message: str, userid: str
-    ) -> str:
+        self,
+        session: AsyncSession,
+        user_message: str,
+        userid: str,
+        max_retrieval_items: int = 5,
+        min_cos_sim: float = config.memory_cosine_similarity,
+    ) -> list[tuple[MemoryMetric, float]]:
         """
-        使用 Lufy 检索记忆，并生成对应的系统提示
+        使用 Lufy 检索记忆
         (参见 https://arxiv.org/html/2409.12524v1#S4)
         """
         memory_items: list[tuple[MemoryMetric, float]] = []
 
         memory_metrics = await MemoryRepository.get_by_user_id(session, userid)
-        key_summary = (
-            await UserProfileRepository.get_by_userid(session, userid) or "暂无"
-        )
-
-        logger.debug(
-            f"len(memory_metrics) = {len(memory_metrics)}; key_summary = {key_summary}"
-        )
-
-        if not memory_metrics:
-            logger.warning("未找到该用户的记忆！跳过记忆检索")
-            return ""
 
         for memory_item in memory_metrics:
             memory_item.session_interval += 1
@@ -274,7 +268,7 @@ class RAGSystem:
 
             logger.debug(f"Cos.Sim({memory_item.content}) = {cos_sim}")
 
-            if cos_sim < config.memory_cosine_similarity:
+            if cos_sim < min_cos_sim:
                 continue
 
             if config.memory_lufy_importance_coefficient:
@@ -290,10 +284,6 @@ class RAGSystem:
 
         memory_items.sort(key=lambda x: x[1], reverse=True)
 
-        if not memory_items:
-            logger.warning("未找到该用户最合适的记忆！跳过记忆检索")
-            return ""
-
         most_relevant_memory = memory_items[0][0]
         most_relevant_memory.r1_count += 1
         logger.debug(f"Top-1 Relevent Memory: {most_relevant_memory.content}")
@@ -302,6 +292,29 @@ class RAGSystem:
             most_relevant_memory2 = memory_items[1][0]
             most_relevant_memory2.r2_count += 1
             logger.debug(f"Top-2 Relevent Memory: {most_relevant_memory2.content}")
+
+        return memory_items[:max_retrieval_items]
+
+    async def retrieval_memory_and_generate_prompt(
+        self, session: AsyncSession, user_message: str, userid: str
+    ) -> str:
+        """
+        检索用户的记忆并生成提示词
+        """
+        memory_metrics = await self.retrieval_memory(session, user_message, userid)
+
+        user_profile = await UserProfileRepository.get_by_userid(session, userid)
+        key_summary = user_profile.key_memory if user_profile else "暂无"
+
+        logger.debug(
+            f"len(memory_metrics) = {len(memory_metrics)}; key_summary = {key_summary}"
+        )
+
+        if not memory_metrics:
+            logger.warning("未找到该用户最合适的记忆！跳过记忆检索")
+            return ""
+
+        most_relevant_memory = memory_metrics[0][0].content
 
         return generate_prompt_from_template(
             "conversation.jinja2",

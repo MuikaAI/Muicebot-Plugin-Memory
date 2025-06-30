@@ -169,7 +169,7 @@ git clone https://huggingface.co/FacebookAI/roberta-large --depth 1
 
 - [X] 支持设定总结模型
 
-- [ ] 支持 AI 手动发起检索
+- [X] 支持 AI 手动发起检索
 
 - [X] 添加嵌入向量缓存
 

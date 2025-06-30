@@ -1,4 +1,5 @@
 from time import perf_counter
+from typing import Optional
 
 from muicebot.llm import ModelRequest
 from muicebot.models import Message
@@ -38,14 +39,21 @@ rag_system = RAGSystem()
 _scheduler = Scheduler()
 
 
-class Params(BaseModel):
+class RecordMemoryParams(BaseModel):
     memory: str = Field(description="记忆内容")
     importance_score: int = Field(
         description="重要性分数(0-10范围内的整数，越高的分数表示记忆越重要)"
     )
 
 
-@on_function_call(description="手动添加对用户的记忆", params=Params)
+class QueryMemoryParams(BaseModel):
+    memory: str = Field(
+        description="要查询的记忆内容（尽量以用户视角的陈述句作为查询内容）"
+    )
+    max_query_items: Optional[int] = Field(description="(可选)最大查询数量", default=5)
+
+
+@on_function_call(description="手动添加对用户的记忆", params=RecordMemoryParams)
 async def record_memory(memory: str, importance_score: int, event: Event) -> str:
     logger.info(f"AI 请求手动保存记忆: {memory}")
 
@@ -59,6 +67,33 @@ async def record_memory(memory: str, importance_score: int, event: Event) -> str
     return "成功"
 
 
+@on_function_call(
+    description="以 RAG 形式手动查询记忆，返回由记忆内容和余弦相关性分数组成的元组列表",
+    params=QueryMemoryParams,
+)
+async def query_memory(
+    event: Event, memory: str, max_query_items: Optional[int] = 5
+) -> str:
+    logger.info(f"AI 请求手动查询记忆: {memory}")
+
+    session = get_session()
+    async with session.begin():
+        memorys = await rag_system.retrieval_memory(
+            session,
+            memory,
+            event.get_user_id(),
+            max_retrieval_items=max_query_items or 5,
+            min_cos_sim=0,
+        )
+
+    results: list[tuple[str, float]] = []
+
+    for memory_metric, score in memorys:
+        results.append((memory_metric.content, score))
+
+    return str(results)
+
+
 @on_before_completion()
 async def retrieval_memory(request: ModelRequest, event: Event):
     session = get_session()
@@ -66,7 +101,7 @@ async def retrieval_memory(request: ModelRequest, event: Event):
     logger.info("开始检索记忆")
 
     async with session.begin():
-        system = await rag_system.retrieval_memory(
+        system = await rag_system.retrieval_memory_and_generate_prompt(
             session, request.prompt, event.get_user_id()
         )
 
