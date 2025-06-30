@@ -60,13 +60,16 @@ async def chat_with_model(
     if isinstance(response, ModelCompletions):
         response_text = response.text
         response_usage = response.usage
+        response_status = response.succeed
     else:
         response_chunks: list[str] = []
         async for chunk in response:
             response_chunks.append(chunk.chunk)
-            response_usage = chunk.usage or chunk.usage
+            response_usage = response_usage or chunk.usage
+            response_status = chunk.succeed if not chunk.succeed else response_status
         response_text = "".join(response_chunks)
 
+    assert response_status, "LLM请求失败"
     logger.debug(f"LLM 请求已完成，用量: {response_usage}")
 
     return response_text
