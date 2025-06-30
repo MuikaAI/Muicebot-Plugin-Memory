@@ -179,6 +179,10 @@ git clone https://huggingface.co/FacebookAI/roberta-large --depth 1
 
 - [ ] 微调适用于中国互联网环境的情感唤醒度计算模型(长期计划)
 
-## 致谢和引用
+## Reference
 
-本插件基于论文 [Should RAG Chatbots Forget Unimportant Conversations? Exploring Importance and Forgetting with Psychological Insights](https://arxiv.org/abs/2409.12524v1) 编写，感谢来自京都大学信息学研究生院的研究者们
+本插件的设计/实现参考了以下论文中的思想：
+
+**Ryuichi Sumida, Koji Inoue, Tatsuya Kawahara**. *Should RAG Chatbots Forget Unimportant Conversations? Exploring Importance and Forgetting with Psychological Insights*, arXiv 2024
+
+<https://arxiv.org/abs/2409.12524v1>
