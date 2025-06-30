@@ -4,11 +4,11 @@ from muicebot.llm import ModelRequest
 from muicebot.models import Message
 from muicebot.plugin import PluginMetadata
 from muicebot.plugin.func_call import on_function_call
-from muicebot.plugin.func_call.parameter import Integer, String
 from muicebot.plugin.hook import on_before_completion, on_finish_chat
 from nonebot import get_driver, logger
 from nonebot.adapters import Event
 from nonebot_plugin_orm import get_session
+from pydantic import BaseModel, Field
 
 from .config import Config, config
 from .rag import RAGSystem
@@ -38,13 +38,14 @@ rag_system = RAGSystem()
 _scheduler = Scheduler()
 
 
-@on_function_call(description="手动添加对用户的记忆").params(
-    memory=String(description="记忆内容", required=True),
-    importance_score=Integer(
-        description="重要性分数(0-10范围内的整数，越高的分数表示记忆越重要)",
-        required=True,
-    ),
-)
+class Params(BaseModel):
+    memory: str = Field(description="记忆内容")
+    importance_score: int = Field(
+        description="重要性分数(0-10范围内的整数，越高的分数表示记忆越重要)"
+    )
+
+
+@on_function_call(description="手动添加对用户的记忆", params=Params)
 async def record_memory(memory: str, importance_score: int, event: Event) -> str:
     logger.info(f"AI 请求手动保存记忆: {memory}")
 
