@@ -46,6 +46,10 @@ class RecordMemoryParams(BaseModel):
     )
 
 
+class RecordPreferenceParam(BaseModel):
+    preference: str = Field(description="记忆内容，不多于50字", max_length=50)
+
+
 class QueryMemoryParams(BaseModel):
     memory: str = Field(
         description="要查询的记忆内容（尽量以用户视角的陈述句作为查询内容）"
@@ -53,15 +57,34 @@ class QueryMemoryParams(BaseModel):
     max_query_items: Optional[int] = Field(description="(可选)最大查询数量", default=5)
 
 
-@on_function_call(description="手动添加对用户的记忆", params=RecordMemoryParams)
+@on_function_call(
+    description="手动添加对用户的记忆（日常回答相关）", params=RecordMemoryParams
+)
 async def record_memory(memory: str, importance_score: int, event: Event) -> str:
-    logger.info(f"AI 请求手动保存记忆: {memory}")
+    userid = event.get_user_id()
+    logger.info(f"AI 请求手动保存记忆: {memory}({userid})")
 
     session = get_session()
     async with session.begin():
         await rag_system.mannual_record_memory(
-            session, event.get_user_id(), memory, importance_score
+            session, userid, memory, importance_score
         )
+
+    logger.info("已成功执行了请求")
+    return "成功"
+
+
+@on_function_call(
+    description="记录用户的关键记忆（包含用户回答偏好，用户个人信息等），这一部分的记忆会被附加到系统提示中",
+    params=RecordPreferenceParam,
+)
+async def record_user_perferences(preference: str, event: Event) -> str:
+    userid = event.get_user_id()
+    logger.info(f"AI 请求手动保存用户偏好: {preference}({userid})")
+
+    session = get_session()
+    async with session.begin():
+        await rag_system.mannual_record_user_preferences(session, userid, preference)
 
     logger.info("已成功执行了请求")
     return "成功"

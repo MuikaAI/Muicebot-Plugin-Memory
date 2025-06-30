@@ -305,6 +305,9 @@ class RAGSystem:
 
         user_profile = await UserProfileRepository.get_by_userid(session, userid)
         key_summary = user_profile.key_memory if user_profile else "暂无"
+        user_perferences: list[str] = (
+            json.loads(user_profile.preferences) if user_profile else []
+        )
 
         logger.debug(
             f"len(memory_metrics) = {len(memory_metrics)}; key_summary = {key_summary}"
@@ -320,6 +323,7 @@ class RAGSystem:
             "conversation.jinja2",
             key_summary=key_summary,
             related_memory=most_relevant_memory,
+            user_perferences=";".join(user_perferences),
         )
 
     async def generate_memory(
@@ -473,3 +477,24 @@ class RAGSystem:
         )
 
         await MemoryRepository.add(session, new_memory_item)
+
+    async def mannual_record_user_preferences(
+        self, session: AsyncSession, userid: str, content: str
+    ):
+        """
+        保存 AI 对用户的回答偏好
+        """
+        user_profile = await UserProfileRepository.get_by_userid(session, userid)
+        if user_profile:
+            user_perferences: list[str] = json.loads(user_profile.preferences)
+            user_perferences.append(content)
+            user_profile.preferences = json.dumps(user_perferences, ensure_ascii=False)
+        else:
+            await UserProfileRepository.add(
+                session,
+                UserProfile(
+                    user_id=userid,
+                    key_memory="暂无",
+                    perferences=json.dumps([content], ensure_ascii=False),
+                ),
+            )
