@@ -171,7 +171,7 @@ git clone https://huggingface.co/FacebookAI/roberta-large --depth 1
 
 - [ ] 支持 AI 手动发起检索
 
-- [ ] 添加嵌入向量缓存
+- [X] 添加嵌入向量缓存
 
 - [ ] 新增多种记忆种类，提高记忆粒度
 

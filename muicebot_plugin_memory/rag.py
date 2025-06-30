@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+from pathlib import Path
 from time import perf_counter
+from typing import Optional
 
 import numpy as np
 import openai
@@ -12,6 +16,7 @@ from muicebot.templates import (
     generate_prompt_from_template as get_original_system_prompt,
 )
 from nonebot import logger
+from nonebot_plugin_localstore import get_plugin_data_dir
 from numpy import ndarray
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,29 +66,136 @@ class RAGSystem:
         self.wR2 = -0.01241566
         """第二最相关记忆计数"""
 
+        # 初始化缓存目录
+        if config.memory_embedding_cache_enabled:
+            self.cache_dir = get_plugin_data_dir() / "embedding"
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            self.cache_dir = None
+
         self._initialized = True
 
     @staticmethod
     def get_instance() -> "RAGSystem":
         return RAGSystem()
 
+    def _get_embedding_cache_path(self, text: str) -> Optional[Path]:
+        """
+        获取嵌入缓存文件路径
+
+        :param text: 查询文本
+        """
+        if not self.cache_dir:
+            return None
+
+        # 根据文本和模型名称生成缓存键
+        content = f"{config.memory_rag_embedding_model}:{text}"
+        cache_key = hashlib.md5(content.encode("utf-8")).hexdigest()
+
+        return self.cache_dir / cache_key
+
+    def _load_embedding_from_cache(self, text: str) -> Optional[ndarray]:
+        """
+        从缓存文件中加载嵌入向量
+
+        :param text: 查询文本
+        """
+        if not config.memory_embedding_cache_enabled:
+            return None
+
+        try:
+            cache_path = self._get_embedding_cache_path(text)
+            if not cache_path:
+                return None
+
+            meta_path = cache_path.with_suffix(".json")
+            npy_path = cache_path.with_suffix(".npy")
+
+            if not (meta_path.exists() and npy_path.exists()):
+                return None
+
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+
+            if (
+                isinstance(meta, dict)
+                and "model" in meta
+                and meta["model"] == config.memory_rag_embedding_model
+                and "text_hash" in meta
+                and meta["text_hash"]
+                == hashlib.sha256(text.encode("utf-8")).hexdigest()
+            ):
+                embedding = np.load(npy_path)
+                logger.debug(f"从缓存加载嵌入向量: {text[:50]}...")
+                return embedding
+            return None
+
+        except Exception as e:
+            logger.warning(f"加载缓存失败: {e}")
+            return None
+
+    def _save_to_cache(self, text: str, embedding: ndarray) -> None:
+        """
+        将嵌入向量保存到缓存文件
+        """
+        import json
+
+        if not config.memory_embedding_cache_enabled or not self.cache_dir:
+            return
+
+        try:
+            cache_path = self._get_embedding_cache_path(text)
+            if not cache_path:
+                return
+
+            meta_path = cache_path.with_suffix(".json")
+            npy_path = cache_path.with_suffix(".npy")
+
+            meta_data = {
+                "model": config.memory_rag_embedding_model,
+                "text_hash": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            }
+
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(meta_data, f)
+            np.save(npy_path, embedding)
+
+            logger.debug(f"嵌入向量已缓存: {text[:50]}...")
+        except Exception as e:
+            logger.warning(f"保存缓存失败: {e}")
+
     @alru_cache(maxsize=1024)
     async def _get_embedding(self, text: str) -> ndarray:
         """
-        调用 OpenAI API 兼容端口获取字符串的嵌入向量
+        调用 OpenAI API 兼容端口获取字符串的嵌入向量，支持离线缓存
 
         :param text: 要查询的字符串
         """
-        logger.debug(f"正在查询文本嵌入向量: {text}")
+        logger.debug(f"正在查询文本嵌入向量: {text[:50]}...")
 
+        # 首先尝试从磁盘缓存加载
+        cached_embedding = self._load_embedding_from_cache(text)
+        if cached_embedding is not None:
+            return cached_embedding
+
+        # 缓存未命中，调用 API
         start_time = perf_counter()
-        response = await self.client.embeddings.create(
-            model=config.memory_rag_embedding_model, input=[text]
-        )
-        end_time = perf_counter()
+        try:
+            response = await self.client.embeddings.create(
+                model=config.memory_rag_embedding_model, input=[text]
+            )
+            embedding = np.array(response.data[0].embedding)
 
-        logger.debug(f"已完成查询，用时: {end_time - start_time}s")
-        return np.array(response.data[0].embedding)
+            # 保存到磁盘缓存
+            self._save_to_cache(text, embedding)
+
+            end_time = perf_counter()
+            logger.debug(f"已完成查询，用时: {end_time - start_time}s")
+            return embedding
+
+        except Exception as e:
+            logger.error(f"获取嵌入向量失败: {e}")
+            raise
 
     def _cosine_similarity(self, vec1: ndarray, vec2: ndarray) -> float:
         """

@@ -28,5 +28,8 @@ class Config(BaseModel):
     memory_lufy_enable_arousal: bool = False
     """启用 LUFY 唤醒度计算"""
 
+    memory_embedding_cache_enabled: bool = True
+    """启用嵌入向量离线缓存"""
+
 
 config = get_plugin_config(Config)
