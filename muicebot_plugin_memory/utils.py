@@ -1,13 +1,18 @@
 import re
 from functools import cache
 from pathlib import Path
+from typing import Optional
 
 from jinja2 import Environment, FileSystemLoader, Template, TemplateNotFound
-from muicebot.llm import ModelCompletions, ModelRequest
+from muicebot.config import get_model_config
+from muicebot.llm import BaseLLM, ModelCompletions, ModelRequest, load_model
 from muicebot.muice import Muice
 from nonebot import logger
 
+from .config import config
+
 SEARCH_PATH = [Path(__file__).parent / "templates"]
+summary_model: Optional[BaseLLM] = None
 
 
 @cache
@@ -23,6 +28,16 @@ def _get_template(template_name: str) -> Template:
         raise
 
     return template
+
+
+def _get_model(config: str) -> BaseLLM:
+    global summary_model
+    if summary_model:
+        return summary_model
+
+    summary_model = load_model(get_model_config(config))
+    summary_model.load()
+    return summary_model
 
 
 def generate_prompt_from_template(template_name: str, **kwargs) -> str:
@@ -46,10 +61,12 @@ async def chat_with_model(
 
     :raise RuntimeError: LLM 尚未运行
     """
-
-    model = Muice.get_instance().model
-    if not (model and model.is_running):
-        raise RuntimeError("LLM 尚未运行！")
+    if not config.memory_summary_model:
+        model = Muice.get_instance().model
+        if not (model and model.is_running):
+            raise RuntimeError("LLM 尚未运行！")
+    else:
+        model = _get_model(config.memory_summary_model)
 
     model_request = ModelRequest(prompt, system=system)
     response_usage = -1

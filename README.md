@@ -125,6 +125,14 @@ git clone https://huggingface.co/FacebookAI/roberta-large --depth 1
 
 - 默认值: 5
 
+### memory_summary_model
+
+- 说明: 总结模型配置(记忆总结、重要性估计)，默认使用全局模型
+
+- 类型: Optional[str]
+
+- 默认值: None
+
 ### memory_cosine_similarity
 
 - 说明: 余弦相似度阈值，低于此值的将不被回忆（除非进行大量实验，否则不要轻易更改此项）
@@ -159,7 +167,7 @@ git clone https://huggingface.co/FacebookAI/roberta-large --depth 1
 
 ## 下一步工作
 
-- [ ] 支持设定总结模型
+- [X] 支持设定总结模型
 
 - [ ] 支持 AI 手动发起检索
 
@@ -169,7 +177,7 @@ git clone https://huggingface.co/FacebookAI/roberta-large --depth 1
 
 - [ ] 新增群聊环境中的记忆
 
-- [ ] 微调适用于中国互联网环境的情感唤醒度计算模型
+- [ ] 微调适用于中国互联网环境的情感唤醒度计算模型(长期计划)
 
 ## 致谢和引用
 

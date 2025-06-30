@@ -1,3 +1,5 @@
+from typing import Optional
+
 from nonebot import get_plugin_config
 from pydantic import BaseModel
 
@@ -14,6 +16,8 @@ class Config(BaseModel):
     """会话过期时间（分钟）"""
     memory_session_min_epoch: int = 5
     """会话中的最小对话轮数"""
+    memory_summary_model: Optional[str] = None
+    """总结模型配置(记忆总结、重要性估计)"""
 
     memory_cosine_similarity: float = 0.8
     """余弦相似度阈值，低于此值的将不被回忆"""
