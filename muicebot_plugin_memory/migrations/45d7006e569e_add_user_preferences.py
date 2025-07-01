@@ -30,8 +30,9 @@ def upgrade(name: str = "") -> None:
             sa.Column(
                 "preferences",
                 sa.Text(),
-                nullable=False,
+                nullable=True,
                 comment="用户偏好（列表映射为字符串）",
+                default="[]",
             )
         )
 

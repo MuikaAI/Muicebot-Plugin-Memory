@@ -18,7 +18,7 @@ class UserProfile(Model):
     # name: Mapped[str] = mapped_column(String(32), comment="用户昵称")
     key_memory: Mapped[str] = mapped_column(Text, comment="关键记忆")
     preferences: Mapped[str] = mapped_column(
-        Text, comment="用户偏好（列表映射为字符串）", default="[]"
+        Text, comment="用户偏好（列表映射为字符串）", nullable=True, default="[]"
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
