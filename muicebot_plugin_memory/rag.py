@@ -309,7 +309,9 @@ class RAGSystem:
         user_profile = await UserProfileRepository.get_by_userid(session, userid)
         key_summary = user_profile.key_memory if user_profile else "暂无"
         user_perferences: list[str] = (
-            json.loads(user_profile.preferences) if user_profile else []
+            json.loads(user_profile.preferences)
+            if user_profile and user_profile.preferences
+            else []
         )
 
         logger.debug(
