@@ -284,6 +284,9 @@ class RAGSystem:
 
         memory_items.sort(key=lambda x: x[1], reverse=True)
 
+        if not memory_items:
+            return []
+
         most_relevant_memory = memory_items[0][0]
         most_relevant_memory.r1_count += 1
         logger.debug(f"Top-1 Relevent Memory: {most_relevant_memory.content}")
