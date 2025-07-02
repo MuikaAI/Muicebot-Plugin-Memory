@@ -319,10 +319,14 @@ class RAGSystem:
         )
 
         if not memory_metrics:
-            logger.warning("未找到该用户最合适的记忆！跳过记忆检索")
-            return ""
+            logger.warning("未找到该用户最合适的记忆")
+            most_relevant_memory = "暂无"
+        else:
+            most_relevant_memory = memory_metrics[0][0].content
 
-        most_relevant_memory = memory_metrics[0][0].content
+        if not any((key_summary, most_relevant_memory, user_perferences)):
+            logger.warning("未找到有关此用户的更多信息")
+            return ""
 
         return generate_prompt_from_template(
             "conversation.jinja2",
@@ -500,6 +504,6 @@ class RAGSystem:
                 UserProfile(
                     user_id=userid,
                     key_memory="暂无",
-                    perferences=json.dumps([content], ensure_ascii=False),
+                    preferences=json.dumps([content], ensure_ascii=False),
                 ),
             )
