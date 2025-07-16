@@ -8,7 +8,7 @@ from muicebot.plugin.func_call import on_function_call
 from muicebot.plugin.hook import on_before_completion, on_finish_chat
 from nonebot import get_driver, logger
 from nonebot.adapters import Event
-from nonebot_plugin_orm import get_session
+from nonebot_plugin_orm import get_scoped_session
 from pydantic import BaseModel, Field
 
 from .config import Config, config
@@ -64,11 +64,8 @@ async def record_memory(memory: str, importance_score: int, event: Event) -> str
     userid = event.get_user_id()
     logger.info(f"AI 请求手动保存记忆: {memory}({userid})")
 
-    session = get_session()
-    async with session.begin():
-        await rag_system.mannual_record_memory(
-            session, userid, memory, importance_score
-        )
+    session = get_scoped_session()
+    await rag_system.mannual_record_memory(session, userid, memory, importance_score)
 
     logger.info("已成功执行了请求")
     return "成功"
@@ -82,9 +79,8 @@ async def record_user_perferences(preference: str, event: Event) -> str:
     userid = event.get_user_id()
     logger.info(f"AI 请求手动保存用户偏好: {preference}({userid})")
 
-    session = get_session()
-    async with session.begin():
-        await rag_system.mannual_record_user_preferences(session, userid, preference)
+    session = get_scoped_session()
+    await rag_system.mannual_record_user_preferences(session, userid, preference)
 
     logger.info("已成功执行了请求")
     return "成功"
@@ -99,15 +95,14 @@ async def query_memory(
 ) -> str:
     logger.info(f"AI 请求手动查询记忆: {memory}")
 
-    session = get_session()
-    async with session.begin():
-        memorys = await rag_system.retrieval_memory(
-            session,
-            memory,
-            event.get_user_id(),
-            max_retrieval_items=max_query_items or 5,
-            min_cos_sim=0,
-        )
+    session = get_scoped_session()
+    memorys = await rag_system.retrieval_memory(
+        session,
+        memory,
+        event.get_user_id(),
+        max_retrieval_items=max_query_items or 5,
+        min_cos_sim=0,
+    )
 
     results: list[tuple[str, float]] = []
 
@@ -119,14 +114,13 @@ async def query_memory(
 
 @on_before_completion()
 async def retrieval_memory(request: ModelRequest, event: Event):
-    session = get_session()
+    session = get_scoped_session()
     start_time = perf_counter()
     logger.info("开始检索记忆")
 
-    async with session.begin():
-        system = await rag_system.retrieval_memory_and_generate_prompt(
-            session, request.prompt, event.get_user_id()
-        )
+    system = await rag_system.retrieval_memory_and_generate_prompt(
+        session, request.prompt, event.get_user_id()
+    )
 
     end_time = perf_counter()
     logger.info(f"记忆检索完成⭐用时{end_time - start_time}s")

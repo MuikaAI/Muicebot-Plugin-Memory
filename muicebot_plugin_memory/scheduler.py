@@ -9,7 +9,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from muicebot.models import Message
 from nonebot import logger
 from nonebot_plugin_apscheduler import scheduler
-from nonebot_plugin_orm import get_session
+from nonebot_plugin_orm import get_scoped_session
 
 from .config import config
 from .rag import RAGSystem
@@ -52,17 +52,17 @@ class Scheduler:
 
             logger.info(f"开始总结用户{userid}的记忆...")
             start_time = perf_counter()
-            session = get_session()
-            async with session.begin():
-                rag_system = RAGSystem.get_instance()
-                logger.info(f"[{userid}] 总结对话 1/3")
-                await rag_system.summary_conversations(
-                    session, self._user_message_pool[userid]
-                )
-                logger.info(f"[{userid}] 提取关键记忆 2/3")
-                await rag_system.save_memories(session, self._user_message_pool[userid])
-                logger.info(f"[{userid}] 更新关键记忆 3/3")
-                await rag_system.key_summary(session, userid)
+            session = get_scoped_session()
+            rag_system = RAGSystem.get_instance()
+
+            logger.info(f"[{userid}] 总结对话 1/3")
+            await rag_system.summary_conversations(
+                session, self._user_message_pool[userid]
+            )
+            logger.info(f"[{userid}] 提取关键记忆 2/3")
+            await rag_system.save_memories(session, self._user_message_pool[userid])
+            logger.info(f"[{userid}] 更新关键记忆 3/3")
+            await rag_system.key_summary(session, userid)
 
             end_time = perf_counter()
             logger.success(

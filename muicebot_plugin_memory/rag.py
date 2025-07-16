@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import math
-from pathlib import Path
 from time import perf_counter
-from typing import Optional
 
 import numpy as np
-import openai
 from async_lru import alru_cache
+from muicebot.config import get_embedding_model_config
+from muicebot.llm import load_embedding_model
 from muicebot.models import Message
 from muicebot.muice import Muice
 from muicebot.templates import (
@@ -17,8 +15,8 @@ from muicebot.templates import (
 )
 from nonebot import logger
 from nonebot_plugin_localstore import get_plugin_data_dir
+from nonebot_plugin_orm import async_scoped_session
 from numpy import ndarray
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import config
 from .database.models import ConversationSummary, MemoryMetric, UserProfile
@@ -50,10 +48,6 @@ class RAGSystem:
         if self._initialized:
             return
 
-        self.client = openai.AsyncOpenAI(
-            api_key=config.memory_rag_api_key, base_url=config.memory_rag_base_url
-        )
-
         # Lufy 记忆重要性模型权重
         self.wA = 2.76290708
         """唤醒权重"""
@@ -73,96 +67,16 @@ class RAGSystem:
         else:
             self.cache_dir = None
 
+        embedding_config = get_embedding_model_config(
+            config.memory_rag_embedding_config
+        )
+        self._embedding_model = load_embedding_model(embedding_config)
+
         self._initialized = True
 
     @staticmethod
     def get_instance() -> "RAGSystem":
         return RAGSystem()
-
-    def _get_embedding_cache_path(self, text: str) -> Optional[Path]:
-        """
-        获取嵌入缓存文件路径
-
-        :param text: 查询文本
-        """
-        if not self.cache_dir:
-            return None
-
-        # 根据文本和模型名称生成缓存键
-        content = f"{config.memory_rag_embedding_model}:{text}"
-        cache_key = hashlib.md5(content.encode("utf-8")).hexdigest()
-
-        return self.cache_dir / cache_key
-
-    def _load_embedding_from_cache(self, text: str) -> Optional[ndarray]:
-        """
-        从缓存文件中加载嵌入向量
-
-        :param text: 查询文本
-        """
-        if not config.memory_embedding_cache_enabled:
-            return None
-
-        try:
-            cache_path = self._get_embedding_cache_path(text)
-            if not cache_path:
-                return None
-
-            meta_path = cache_path.with_suffix(".json")
-            npy_path = cache_path.with_suffix(".npy")
-
-            if not (meta_path.exists() and npy_path.exists()):
-                return None
-
-            with open(meta_path, "r", encoding="utf-8") as f:
-                meta = json.load(f)
-
-            if (
-                isinstance(meta, dict)
-                and "model" in meta
-                and meta["model"] == config.memory_rag_embedding_model
-                and "text_hash" in meta
-                and meta["text_hash"]
-                == hashlib.sha256(text.encode("utf-8")).hexdigest()
-            ):
-                embedding = np.load(npy_path)
-                logger.debug(f"从缓存加载嵌入向量: {text[:50]}...")
-                return embedding
-            return None
-
-        except Exception as e:
-            logger.warning(f"加载缓存失败: {e}")
-            return None
-
-    def _save_to_cache(self, text: str, embedding: ndarray) -> None:
-        """
-        将嵌入向量保存到缓存文件
-        """
-        import json
-
-        if not config.memory_embedding_cache_enabled or not self.cache_dir:
-            return
-
-        try:
-            cache_path = self._get_embedding_cache_path(text)
-            if not cache_path:
-                return
-
-            meta_path = cache_path.with_suffix(".json")
-            npy_path = cache_path.with_suffix(".npy")
-
-            meta_data = {
-                "model": config.memory_rag_embedding_model,
-                "text_hash": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-            }
-
-            with open(meta_path, "w", encoding="utf-8") as f:
-                json.dump(meta_data, f)
-            np.save(npy_path, embedding)
-
-            logger.debug(f"嵌入向量已缓存: {text[:50]}...")
-        except Exception as e:
-            logger.warning(f"保存缓存失败: {e}")
 
     @alru_cache(maxsize=1024)
     async def _get_embedding(self, text: str) -> ndarray:
@@ -173,21 +87,11 @@ class RAGSystem:
         """
         logger.debug(f"正在查询文本嵌入向量: {text[:50]}...")
 
-        # 首先尝试从磁盘缓存加载
-        cached_embedding = self._load_embedding_from_cache(text)
-        if cached_embedding is not None:
-            return cached_embedding
-
         # 缓存未命中，调用 API
         start_time = perf_counter()
         try:
-            response = await self.client.embeddings.create(
-                model=config.memory_rag_embedding_model, input=[text]
-            )
-            embedding = np.array(response.data[0].embedding)
-
-            # 保存到磁盘缓存
-            self._save_to_cache(text, embedding)
+            response = await self._embedding_model.embed([text])
+            embedding = np.array(response.embeddings[0])
 
             end_time = perf_counter()
             logger.debug(f"已完成查询，用时: {end_time - start_time}s")
@@ -245,7 +149,7 @@ class RAGSystem:
 
     async def retrieval_memory(
         self,
-        session: AsyncSession,
+        session: async_scoped_session,
         user_message: str,
         userid: str,
         max_retrieval_items: int = 5,
@@ -299,7 +203,7 @@ class RAGSystem:
         return memory_items[:max_retrieval_items]
 
     async def retrieval_memory_and_generate_prompt(
-        self, session: AsyncSession, user_message: str, userid: str
+        self, session: async_scoped_session, user_message: str, userid: str
     ) -> str:
         """
         检索用户的记忆并生成提示词
@@ -336,7 +240,7 @@ class RAGSystem:
         )
 
     async def generate_memory(
-        self, session: AsyncSession, message: Message
+        self, session: async_scoped_session, message: Message
     ) -> MemoryMetric:
         """
         新建一条输入-输出对记忆并初始化心理数值
@@ -374,7 +278,9 @@ class RAGSystem:
 
         return new_memory_item
 
-    async def save_memories(self, session: AsyncSession, conversations: list[Message]):
+    async def save_memories(
+        self, session: async_scoped_session, conversations: list[Message]
+    ):
         """
         保存当前对话中比较重要的记忆
         """
@@ -401,7 +307,7 @@ class RAGSystem:
         await session.flush()
 
     async def summary_conversations(
-        self, session: AsyncSession, conversations: list[Message]
+        self, session: async_scoped_session, conversations: list[Message]
     ):
         """
         总结对话
@@ -437,7 +343,7 @@ class RAGSystem:
             session, ConversationSummary(content=summary, userid=userid)
         )
 
-    async def key_summary(self, session: AsyncSession, userid: str):
+    async def key_summary(self, session: async_scoped_session, userid: str):
         """
         更新关键总结
         """
@@ -466,7 +372,11 @@ class RAGSystem:
             )
 
     async def mannual_record_memory(
-        self, session: AsyncSession, userid: str, content: str, importance_score: int
+        self,
+        session: async_scoped_session,
+        userid: str,
+        content: str,
+        importance_score: int,
     ):
         """
         保存 AI 的手动记忆内容
@@ -488,7 +398,7 @@ class RAGSystem:
         await MemoryRepository.add(session, new_memory_item)
 
     async def mannual_record_user_preferences(
-        self, session: AsyncSession, userid: str, content: str
+        self, session: async_scoped_session, userid: str, content: str
     ):
         """
         保存 AI 对用户的回答偏好

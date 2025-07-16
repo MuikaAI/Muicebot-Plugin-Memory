@@ -5,12 +5,8 @@ from pydantic import BaseModel
 
 
 class Config(BaseModel):
-    memory_rag_api_key: str
-    """访问嵌入模型所需的 API Key"""
-    memory_rag_embedding_model: str = "text-embedding-v4"
-    """嵌入模型名称"""
-    memory_rag_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    """OpenAI 兼容端口的嵌入模型 base_url"""
+    memory_rag_embedding_config: Optional[str] = None
+    """嵌入模型配置名"""
 
     memory_session_expire_time: int = 60
     """会话过期时间（分钟）"""
