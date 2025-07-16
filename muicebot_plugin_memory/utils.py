@@ -83,7 +83,9 @@ async def chat_with_model(
         response_status = True
         async for chunk in response:
             response_chunks.append(chunk.chunk)
-            response_usage = response_usage or chunk.usage
+            response_usage = (
+                chunk.usage if chunk.usage > response_usage else response_usage
+            )
             response_status = chunk.succeed if not chunk.succeed else response_status
         response_text = "".join(response_chunks)
 
