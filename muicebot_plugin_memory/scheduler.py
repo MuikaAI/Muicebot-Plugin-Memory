@@ -66,7 +66,7 @@ class Scheduler:
 
             end_time = perf_counter()
             logger.success(
-                f"用户{userid}的记忆已总结完成⭐(用时{ end_time - start_time}s)"
+                f"用户{userid}的记忆已总结完成⭐(用时{end_time - start_time}s)"
             )
             del self._user_message_pool[userid]
 
