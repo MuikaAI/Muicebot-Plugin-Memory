@@ -141,7 +141,7 @@ class RAGSystem:
             + perplexity * self.wP
             + llm_estimated_importance * self.wL
             + most_relevant_memory_count * self.wR1
-            + most_relevant_memory_count2 * self.wR2
+            - most_relevant_memory_count2 * self.wR2
         )
         session_interval = memory_entry.session_interval  # Δt
 
